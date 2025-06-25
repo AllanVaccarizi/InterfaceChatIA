@@ -216,11 +216,6 @@ function App() {
   const sendToN8N = async (message, conversationId) => {
   try {
     const webhookUrl = process.env.REACT_APP_N8N_WEBHOOK_URL;
-    
-    // DEBUG
-    console.log('🔍 URL utilisée:', webhookUrl);
-    console.log('🔍 URL attendue:', 'https://n8n.srv749948.hstgr.cloud/webhook/147c3c66-6de5-408c-8df7-9420b613c6c1/chat');
-    
     if (!webhookUrl) {
       throw new Error('URL webhook N8N non configurée');
     }
