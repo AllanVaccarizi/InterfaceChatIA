@@ -15,6 +15,39 @@ body {
   display: flex;
   height: 100vh;
   background-color: #1a1a1a;
+  position: relative;
+}
+
+/* Bouton burger mobile */
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  background-color: #2d2d2d;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  padding: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.mobile-menu-btn:hover {
+  background-color: #404040;
+}
+
+/* Overlay pour fermer la sidebar */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
 }
 
 /* Sidebar */
@@ -24,11 +57,33 @@ body {
   border-right: 1px solid #2d2d2d;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .sidebar-header {
   padding: 16px;
   border-bottom: 1px solid #2d2d2d;
+  position: relative;
+}
+
+/* Bouton fermer mobile */
+.mobile-close-btn {
+  display: none;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.mobile-close-btn:hover {
+  background-color: #2d2d2d;
+  color: #ffffff;
 }
 
 .new-chat-btn {
@@ -324,20 +379,83 @@ body {
 
 /* Responsive */
 @media (max-width: 768px) {
+  /* Afficher le bouton burger */
+  .mobile-menu-btn {
+    display: block;
+  }
+  
+  /* Afficher l'overlay quand la sidebar est ouverte */
+  .sidebar.open ~ .sidebar-overlay,
+  .sidebar-overlay {
+    display: block;
+  }
+  
+  /* Sidebar mobile */
   .sidebar {
-    width: 100%;
-    position: absolute;
+    width: 280px;
+    position: fixed;
     top: 0;
-    left: -100%;
+    left: -280px;
+    height: 100vh;
     z-index: 1000;
-    transition: left 0.3s;
+    transition: left 0.3s ease;
   }
   
   .sidebar.open {
     left: 0;
   }
   
+  /* Afficher le bouton fermer sur mobile */
+  .sidebar .mobile-close-btn {
+    display: block;
+  }
+  
+  /* Ajuster l'espacement du header pour le bouton fermer */
+  .sidebar-header {
+    padding-top: 60px;
+  }
+  
+  /* Chat area prend toute la largeur sur mobile */
+  .chat-area {
+    width: 100%;
+    margin-left: 0;
+  }
+  
+  /* Ajuster le padding des messages pour le bouton burger */
+  .messages-container {
+    padding: 70px 15px 20px 15px;
+  }
+  
+  /* Messages plus larges sur mobile */
   .message {
     max-width: 95%;
+  }
+  
+  /* Formulaire de saisie ajusté */
+  .message-input-form {
+    padding: 15px;
+  }
+  
+  .message-input-container {
+    gap: 8px;
+  }
+  
+  /* Page d'accueil ajustée */
+  .no-conversation {
+    padding: 100px 20px 40px 20px;
+  }
+  
+  .no-conversation h2 {
+    font-size: 20px;
+  }
+  
+  .no-conversation p {
+    font-size: 14px;
+  }
+  
+  /* Hint moins visible sur mobile */
+  .conversation-hint {
+    font-size: 11px;
+    padding: 8px 12px;
   }
 }

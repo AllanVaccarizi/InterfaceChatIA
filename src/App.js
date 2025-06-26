@@ -1,7 +1,7 @@
 // src/App.js
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { MessageCircle, Plus, Send, Trash2 } from 'lucide-react';
+import { MessageCircle, Plus, Send, Trash2, Menu, X } from 'lucide-react';
 import './App.css';
 
 function App() {
@@ -12,28 +12,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [editingConversation, setEditingConversation] = useState(null);
   const [newTitle, setNewTitle] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false); // État pour la sidebar mobile
   const messagesEndRef = useRef(null);
 
   // Charger les conversations au démarrage
   useEffect(() => {
     loadConversations();
-    
-    // Désactiver temporairement le Real-time pour debug
-    // const messageSubscription = supabase
-    //   .channel('messages')
-    //   .on('postgres_changes', 
-    //     { event: 'INSERT', schema: 'public', table: 'messages' },
-    //     (payload) => {
-    //       if (payload.new.conversation_id === activeConversation && payload.new.role === 'assistant') {
-    //         setMessages(prev => [...prev, payload.new]);
-    //       }
-    //     }
-    //   )
-    //   .subscribe();
-
-    // return () => {
-    //   messageSubscription.unsubscribe();
-    // };
   }, [activeConversation]);
 
   // Scroll automatique vers le bas
@@ -90,6 +74,7 @@ function App() {
       setConversations(prev => [data, ...prev]);
       setActiveConversation(data.id);
       setMessages([]);
+      setSidebarOpen(false); // Fermer la sidebar sur mobile après sélection
     } catch (error) {
       console.error('Erreur création conversation:', error);
     }
@@ -99,6 +84,7 @@ function App() {
   const selectConversation = (conversationId) => {
     setActiveConversation(conversationId);
     loadMessages(conversationId);
+    setSidebarOpen(false); // Fermer la sidebar sur mobile après sélection
   };
 
   // Supprimer une conversation
@@ -170,6 +156,11 @@ function App() {
     }
   };
 
+  // Fermer la sidebar quand on clique sur l'overlay
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+  };
+
   // Envoyer un message
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -214,41 +205,41 @@ function App() {
 
   // Fonction pour envoyer à N8N
   const sendToN8N = async (message, conversationId) => {
-  try {
-    const webhookUrl = process.env.REACT_APP_N8N_WEBHOOK_URL;
-    if (!webhookUrl) {
-      throw new Error('URL webhook N8N non configurée');
+    try {
+      const webhookUrl = process.env.REACT_APP_N8N_WEBHOOK_URL;
+      if (!webhookUrl) {
+        throw new Error('URL webhook N8N non configurée');
+      }
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          conversation_id: conversationId,
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur webhook N8N: ${response.status}`);
+      }
+
+      console.log('Message envoyé à N8N avec succès');
+      
+      setTimeout(() => {
+        loadMessages(conversationId);
+      }, 3000);
+
+    } catch (error) {
+      console.error('Erreur N8N:', error);
+      setTimeout(async () => {
+        await addAssistantMessage(conversationId, "Désolé, une erreur s'est produite avec le service IA.");
+      }, 2000);
     }
-    
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: message,
-        conversation_id: conversationId,
-        timestamp: new Date().toISOString()
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Erreur webhook N8N: ${response.status}`);
-    }
-
-    console.log('Message envoyé à N8N avec succès');
-    
-    setTimeout(() => {
-      loadMessages(conversationId);
-    }, 3000);
-
-  } catch (error) {
-    console.error('Erreur N8N:', error);
-    setTimeout(async () => {
-      await addAssistantMessage(conversationId, "Désolé, une erreur s'est produite avec le service IA.");
-    }, 2000);
-  }
-};
+  };
 
   // Ajouter une réponse de l'assistant (utilisé seulement en cas d'erreur maintenant)
   const addAssistantMessage = async (conversationId, content) => {
@@ -275,9 +266,27 @@ function App() {
 
   return (
     <div className="app">
+      {/* Bouton burger pour mobile */}
+      <button 
+        className="mobile-menu-btn"
+        onClick={() => setSidebarOpen(true)}
+      >
+        <Menu size={24} />
+      </button>
+
+      {/* Overlay pour fermer la sidebar sur mobile */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar}></div>}
+
       {/* Sidebar */}
-      <div className="sidebar">
+      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
+          {/* Bouton fermer pour mobile */}
+          <button 
+            className="mobile-close-btn"
+            onClick={closeSidebar}
+          >
+            <X size={20} />
+          </button>
           <button className="new-chat-btn" onClick={createNewConversation}>
             <Plus size={20} />
             Nouvelle conversation
