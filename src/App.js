@@ -266,14 +266,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* Bouton burger pour mobile */}
-      <button 
-        className="mobile-menu-btn"
-        onClick={() => setSidebarOpen(true)}
-      >
-        <Menu size={24} />
-      </button>
-
       {/* Overlay pour fermer la sidebar sur mobile */}
       {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar}></div>}
 
@@ -335,6 +327,14 @@ function App() {
           )}
         </div>
       </div>
+
+      {/* Bouton burger pour mobile */}
+      <button 
+        className={`mobile-menu-btn ${sidebarOpen ? 'hidden' : ''}`}
+        onClick={() => setSidebarOpen(true)}
+      >
+        <Menu size={24} />
+      </button>
 
       {/* Zone de chat principale */}
       <div className="chat-area">

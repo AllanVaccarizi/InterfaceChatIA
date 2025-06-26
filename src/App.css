@@ -31,11 +31,20 @@ body {
   padding: 8px;
   color: #ffffff;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  opacity: 1;
+  visibility: visible;
 }
 
 .mobile-menu-btn:hover {
   background-color: #404040;
+}
+
+/* Masquer le bouton burger quand la sidebar est ouverte */
+.mobile-menu-btn.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Overlay pour fermer la sidebar */
