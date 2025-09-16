@@ -526,4 +526,39 @@ body {
   color: #0b2eab;
   text-decoration: none;
 }
+/* Améliorer le champ de saisie pour les messages longs */
+.message-input {
+  flex: 1;
+  background-color: #2d2d2d;
+  border: 1px solid #404040;
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #ffffff;
+  font-size: 16px;
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s;
+  min-height: 44px;
+  max-height: 120px;
+  overflow-y: auto;
+  line-height: 1.4;
+  font-family: inherit;
+}
+
+.message-input:focus {
+  border-color: #0084ff;
+}
+
+.message-input::placeholder {
+  color: #888;
+}
+
+/* Ajuster le conteneur pour s'adapter au textarea plus haut */
+.message-input-container {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  max-width: 800px;
+  margin: 0 auto;
+}
 }

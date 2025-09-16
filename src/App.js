@@ -161,6 +161,12 @@ function App() {
     setSidebarOpen(false);
   };
 
+  // Fonction pour ajuster automatiquement la hauteur du textarea
+  const adjustTextareaHeight = (textarea) => {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+  };
+
   // Envoyer un message
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -464,13 +470,25 @@ function App() {
 
             <form className="message-input-form" onSubmit={sendMessage}>
               <div className="message-input-container">
-                <input
-                  type="text"
+                <textarea
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Tapez votre message..."
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    adjustTextareaHeight(e.target);
+                  }}
+                  onKeyDown={(e) => {
+                    // Envoyer avec Ctrl+Enter ou Shift+Enter, permettre les sauts de ligne avec Enter seul
+                    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                      e.preventDefault();
+                      if (newMessage.trim() && !loading) {
+                        sendMessage(e);
+                      }
+                    }
+                  }}
+                  placeholder="Tapez votre message... (Entrée pour envoyer, Shift+Entrée pour nouvelle ligne)"
                   className="message-input"
                   disabled={loading}
+                  rows={1}
                 />
                 <button
                   type="submit"
