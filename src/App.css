@@ -504,4 +504,26 @@ body {
   margin-top: 8px;
   display: inline-block;
 }
+/* Styles pour les liens dans les messages */
+.message-link {
+  color: #259feb !important;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.message-link:hover {
+  color: #0b2eab !important;
+  text-decoration: none;
+}
+
+/* Règles spécifiques pour éviter les conflits */
+.message .message-content a {
+  color: #259feb;
+  text-decoration: underline;
+}
+
+.message .message-content a:hover {
+  color: #0b2eab;
+  text-decoration: none;
+}
 }
