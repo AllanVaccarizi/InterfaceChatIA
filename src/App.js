@@ -44,36 +44,17 @@ function App() {
     }
   };
 
-  // Charger les messages d'une conversation (simulé avec le contenu actuel)
+  // Charger les messages d'une conversation
   const loadMessages = async (conversationId) => {
-    console.log('Chargement messages pour conversation:', conversationId);
     try {
       const { data, error } = await supabase
-        .from('conversations')
+        .from('messages')
         .select('*')
-        .eq('session_id', conversationId)
-        .single();
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
 
-      if (error) {
-        console.error('Erreur Supabase:', error);
-        throw error;
-      }
-      
-      console.log('Conversation chargée:', data);
-      
-      // Pour l'instant, créer un message fictif basé sur le contenu
-      // Vous devrez adapter cette partie selon votre logique métier
-      const messagesArray = [];
-      if (data.message && data.message !== 'NULL') {
-        messagesArray.push({
-          id: `msg_${data.session_id}`,
-          role: 'user',
-          content: data.message,
-          created_at: data.created_at
-        });
-      }
-      
-      setMessages(messagesArray);
+      if (error) throw error;
+      setMessages(data || []);
     } catch (error) {
       console.error('Erreur chargement messages:', error);
       setMessages([]);
@@ -102,16 +83,22 @@ function App() {
 
   // Sélectionner une conversation
   const selectConversation = (conversationId) => {
-    console.log('Sélection conversation:', conversationId);
     setActiveConversation(conversationId);
     loadMessages(conversationId);
     setSidebarOpen(false);
   };
 
-  // Supprimer une conversation
+  // Supprimer une conversation et ses messages
   const deleteConversation = async (conversationId, e) => {
     e.stopPropagation();
     try {
+      // Supprimer les messages associés
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      // Supprimer la conversation
       const { error } = await supabase
         .from('conversations')
         .delete()
@@ -192,30 +179,30 @@ function App() {
     setLoading(true);
 
     try {
-      // Mettre à jour la conversation avec le nouveau message
-      const { data: updatedConversation, error: updateError } = await supabase
-        .from('conversations')
-        .update({ 
-          message: messageText,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('session_id', activeConversation)
+      // Insérer le message utilisateur
+      const { data: insertedMessage, error: insertError } = await supabase
+        .from('messages')
+        .insert([{
+          conversation_id: activeConversation,
+          role: 'user',
+          content: messageText,
+          created_at: new Date().toISOString()
+        }])
         .select()
         .single();
 
-      if (updateError) throw updateError;
+      if (insertError) throw insertError;
 
-      // Ajouter le message à l'interface immédiatement
-      const newMsg = {
-        id: `msg_${Date.now()}`,
-        role: 'user',
-        content: messageText,
-        created_at: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, newMsg]);
+      setMessages(prev => [...prev, insertedMessage]);
 
       // Envoyer à N8N
       await sendToN8N(messageText, activeConversation);
+
+      // Mettre à jour la date de la conversation
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('session_id', activeConversation);
 
     } catch (error) {
       console.error('Erreur envoi message:', error);
@@ -263,17 +250,29 @@ function App() {
     }
   };
 
-  // Ajouter une réponse de l'assistant (en cas d'erreur)
+  // Ajouter une réponse de l'assistant
   const addAssistantMessage = async (conversationId, content) => {
     const assistantMessage = {
-      id: `msg_assistant_${Date.now()}`,
+      conversation_id: conversationId,
       role: 'assistant',
       content: content,
       created_at: new Date().toISOString()
     };
 
-    if (conversationId === activeConversation) {
-      setMessages(prev => [...prev, assistantMessage]);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([assistantMessage])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (conversationId === activeConversation) {
+        setMessages(prev => [...prev, data]);
+      }
+    } catch (error) {
+      console.error("Erreur ajout message assistant:", error);
     }
   };
 
@@ -285,7 +284,6 @@ function App() {
       {/* Sidebar */}
       <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          {/* Bouton fermer pour mobile */}
           <button 
             className="mobile-close-btn"
             onClick={closeSidebar}
