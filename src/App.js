@@ -18,7 +18,7 @@ function App() {
   // Charger les conversations au démarrage
   useEffect(() => {
     loadConversations();
-  }, []);
+  }, [activeConversation]);
 
   // Scroll automatique vers le bas
   useEffect(() => {
@@ -48,16 +48,15 @@ function App() {
   const loadMessages = async (conversationId) => {
     try {
       const { data, error } = await supabase
-        .from('messages')
+        .from('chat_automation')  // Changement: utilise la table chat_automation
         .select('*')
-        .eq('conversation_id', conversationId)
+        .eq('session_id', conversationId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       setMessages(data || []);
     } catch (error) {
       console.error('Erreur chargement messages:', error);
-      setMessages([]);
     }
   };
 
@@ -88,17 +87,10 @@ function App() {
     setSidebarOpen(false);
   };
 
-  // Supprimer une conversation et ses messages
+  // Supprimer une conversation
   const deleteConversation = async (conversationId, e) => {
     e.stopPropagation();
     try {
-      // Supprimer les messages associés
-      await supabase
-        .from('messages')
-        .delete()
-        .eq('conversation_id', conversationId);
-
-      // Supprimer la conversation
       const { error } = await supabase
         .from('conversations')
         .delete()
@@ -137,7 +129,7 @@ function App() {
 
       setConversations(prev => 
         prev.map(conv => 
-          conv.session_id === conversationId 
+          conv.session_id === conversationId
             ? { ...conv, title: newTitle.trim() }
             : conv
         )
@@ -179,30 +171,27 @@ function App() {
     setLoading(true);
 
     try {
-      // Insérer le message utilisateur
-      const { data: insertedMessage, error: insertError } = await supabase
-        .from('messages')
-        .insert([{
-          conversation_id: activeConversation,
-          role: 'user',
-          content: messageText,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
+      // CHANGEMENT : On n'écrit plus en base depuis React
+      // On ajoute seulement le message dans l'UI temporairement
+      const tempUserMessage = {
+        id: 'temp_' + Date.now(),
+        session_id: activeConversation,
+        role: 'user',
+        message: messageText,
+        created_at: new Date().toISOString()
+      };
 
-      if (insertError) throw insertError;
+      // Ajouter le message à l'interface temporairement
+      setMessages(prev => [...prev, tempUserMessage]);
 
-      setMessages(prev => [...prev, insertedMessage]);
-
-      // Envoyer à N8N
-      await sendToN8N(messageText, activeConversation);
-
-      // Mettre à jour la date de la conversation
+      // Mettre à jour la date de dernière modification de la conversation
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('session_id', activeConversation);
+
+      // Envoyer à N8N - C'est N8N qui va gérer l'historique
+      await sendToN8N(messageText, activeConversation);
 
     } catch (error) {
       console.error('Erreur envoi message:', error);
@@ -219,16 +208,30 @@ function App() {
         throw new Error('URL webhook N8N non configurée');
       }
       
+      const payload = {
+        message: message,
+        session_id: conversationId,
+        timestamp: new Date().toISOString(),
+        // Champs requis par Postgres Chat Memory
+        role: 'user',           // IMPORTANT : Le rôle de l'utilisateur
+        input: message,         // Le message d'entrée
+        chatInput: message      // Nom alternatif que le nœud pourrait chercher
+      };
+
+      // DEBUG : Vérifiez ce qui est envoyé
+      console.log('🚀 Payload envoyé à N8N:', JSON.stringify(payload, null, 2));
+      console.log('🔍 Types:', {
+        message: typeof message,
+        session_id: typeof conversationId,
+        conversationId_value: conversationId
+      });
+
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: message,
-          conversation_id: conversationId,
-          timestamp: new Date().toISOString()
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -237,42 +240,40 @@ function App() {
 
       console.log('Message envoyé à N8N avec succès');
       
-      // Recharger les messages après un délai pour voir la réponse
+      // Recharger les messages depuis la base (N8N aura ajouté le message user + la réponse IA)
       setTimeout(() => {
         loadMessages(conversationId);
-      }, 3000);
+      }, 2000); // Réduit le délai car N8N est plus rapide
 
     } catch (error) {
       console.error('Erreur N8N:', error);
-      setTimeout(async () => {
-        await addAssistantMessage(conversationId, "Désolé, une erreur s'est produite avec le service IA.");
-      }, 2000);
+      // En cas d'erreur, on recharge quand même les messages au cas où N8N aurait partiellement traité
+      setTimeout(() => {
+        loadMessages(conversationId);
+      }, 1000);
     }
   };
 
-  // Ajouter une réponse de l'assistant
-  const addAssistantMessage = async (conversationId, content) => {
-    const assistantMessage = {
-      conversation_id: conversationId,
-      role: 'assistant',
-      content: content,
-      created_at: new Date().toISOString()
-    };
-
+  // Ajouter une réponse de l'assistant - CHANGEMENT ICI: 'session_id' au lieu de 'conversation_id'
+  const addAssistantMessage = async (conversationId, messageContent) => {
     try {
-      const { data, error } = await supabase
+      const { data: assistantMessage, error } = await supabase
         .from('messages')
-        .insert([assistantMessage])
+        .insert([{
+          session_id: conversationId,
+          role: 'assistant',
+          message: messageContent  // 'message' au lieu de 'content'
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
       if (conversationId === activeConversation) {
-        setMessages(prev => [...prev, data]);
+        setMessages(prev => [...prev, assistantMessage]);
       }
     } catch (error) {
-      console.error("Erreur ajout message assistant:", error);
+      console.error('Erreur ajout message assistant:', error);
     }
   };
 
@@ -284,6 +285,7 @@ function App() {
       {/* Sidebar */}
       <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
+          {/* Bouton fermer pour mobile */}
           <button 
             className="mobile-close-btn"
             onClick={closeSidebar}
@@ -352,19 +354,100 @@ function App() {
         {activeConversation ? (
           <>
             <div className="messages-container">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`}
-                >
-                  <div className="message-content">
-                    {message.content}
+              {messages.map((message) => {
+                // Fonction pour extraire le contenu du message
+                const getMessageContent = (msg) => {
+                  try {
+                    // Si message est déjà un objet (JSONB de Postgres)
+                    if (typeof msg.message === 'object' && msg.message !== null) {
+                      return msg.message.content || JSON.stringify(msg.message);
+                    }
+                    
+                    // Si le message est un string JSON, on le parse
+                    if (typeof msg.message === 'string' && msg.message.startsWith('{')) {
+                      const parsed = JSON.parse(msg.message);
+                      return parsed.content || msg.message;
+                    }
+                    
+                    // Si c'est un string simple
+                    if (typeof msg.message === 'string') {
+                      return msg.message;
+                    }
+                    
+                    // Fallback : convertir en string
+                    return String(msg.message);
+                  } catch (error) {
+                    // En cas d'erreur, convertir en string
+                    console.error('Erreur parsing message:', error);
+                    return String(msg.message);
+                  }
+                };
+
+                // Fonction pour déterminer le rôle du message
+                const getMessageRole = (msg) => {
+                  try {
+                    // Si message est un objet JSONB
+                    if (typeof msg.message === 'object' && msg.message !== null) {
+                      if (msg.message.type === 'human') return 'user';
+                      if (msg.message.type === 'ai') return 'assistant';
+                    }
+                    
+                    // Si c'est un JSON string
+                    if (typeof msg.message === 'string' && msg.message.startsWith('{')) {
+                      const parsed = JSON.parse(msg.message);
+                      if (parsed.type === 'human') return 'user';
+                      if (parsed.type === 'ai') return 'assistant';
+                    }
+                    
+                    // Fallback sur la colonne role ou défaut
+                    return msg.role || 'user';
+                  } catch (error) {
+                    return msg.role || 'user';
+                  }
+                };
+
+                // Fonction pour formater le markdown simple
+                const formatMarkdown = (text) => {
+                  if (!text || typeof text !== 'string') return text;
+                  
+                  return text
+                    // Titres H2 (##)
+                    .replace(/^## (.+)$/gm, '<h3 class="message-h2">$1</h3>')
+                    // Titres H3 (###)  
+                    .replace(/^### (.+)$/gm, '<h4 class="message-h3">$1</h4>')
+                    // Gras (**text**)
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    // Italique (*text*)
+                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                    // Code inline (`code`)
+                    .replace(/`(.+?)`/g, '<code class="message-code">$1</code>')
+                    // Liens [text](url)
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="message-link">$1</a>')
+                    // Liens simples (détection automatique des URLs)
+                    .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="message-link">$1</a>')
+                    // Sauts de ligne
+                    .replace(/\n/g, '<br/>');
+                };
+
+                const messageContent = getMessageContent(message);
+                const messageRole = getMessageRole(message);
+                const formattedContent = formatMarkdown(messageContent);
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`message ${messageRole === 'user' ? 'user-message' : 'assistant-message'}`}
+                  >
+                    <div 
+                      className="message-content"
+                      dangerouslySetInnerHTML={{ __html: formattedContent }}
+                    />
+                    <div className="message-time">
+                      {new Date(message.created_at).toLocaleTimeString()}
+                    </div>
                   </div>
-                  <div className="message-time">
-                    {new Date(message.created_at).toLocaleTimeString()}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {loading && (
                 <div className="message assistant-message">
                   <div className="message-content">
