@@ -72,7 +72,7 @@ function App() {
       if (error) throw error;
 
       setConversations(prev => [data, ...prev]);
-      setActiveConversation(data.id);
+      setActiveConversation(data.session_id); // Changement ici
       setMessages([]);
       setSidebarOpen(false); // Fermer la sidebar sur mobile après sélection
     } catch (error) {
@@ -94,11 +94,11 @@ function App() {
       const { error } = await supabase
         .from('conversations')
         .delete()
-        .eq('id', conversationId);
+        .eq('session_id', conversationId); // Changement ici
 
       if (error) throw error;
 
-      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+      setConversations(prev => prev.filter(conv => conv.session_id !== conversationId)); // Changement ici
       if (activeConversation === conversationId) {
         setActiveConversation(null);
         setMessages([]);
@@ -123,13 +123,13 @@ function App() {
       const { error } = await supabase
         .from('conversations')
         .update({ title: newTitle.trim() })
-        .eq('id', conversationId);
+        .eq('session_id', conversationId); // Changement ici
 
       if (error) throw error;
 
       setConversations(prev => 
         prev.map(conv => 
-          conv.id === conversationId 
+          conv.session_id === conversationId  // Changement ici
             ? { ...conv, title: newTitle.trim() }
             : conv
         )
@@ -191,7 +191,7 @@ function App() {
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
-        .eq('id', activeConversation);
+        .eq('session_id', activeConversation); // Changement ici
 
       // Envoyer à N8N
       await sendToN8N(messageText, activeConversation);
@@ -288,22 +288,22 @@ function App() {
         <div className="conversations-list">
           {conversations.map((conversation) => (
             <div
-              key={conversation.id}
-              className={`conversation-item ${activeConversation === conversation.id ? 'active' : ''}`}
-              onClick={() => selectConversation(conversation.id)}
+              key={conversation.session_id} // Changement ici
+              className={`conversation-item ${activeConversation === conversation.session_id ? 'active' : ''}`} // Changement ici
+              onClick={() => selectConversation(conversation.session_id)} // Changement ici
               onContextMenu={(e) => {
                 e.preventDefault();
-                startEditingTitle(conversation.id, conversation.title, e);
+                startEditingTitle(conversation.session_id, conversation.title, e); // Changement ici
               }}
             >
               <MessageCircle size={16} />
-              {editingConversation === conversation.id ? (
+              {editingConversation === conversation.session_id ? ( // Changement ici
                 <input
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => handleKeyPress(e, conversation.id)}
-                  onBlur={() => saveNewTitle(conversation.id)}
+                  onKeyDown={(e) => handleKeyPress(e, conversation.session_id)} // Changement ici
+                  onBlur={() => saveNewTitle(conversation.session_id)} // Changement ici
                   className="title-input"
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
@@ -313,7 +313,7 @@ function App() {
               )}
               <button
                 className="delete-btn"
-                onClick={(e) => deleteConversation(conversation.id, e)}
+                onClick={(e) => deleteConversation(conversation.session_id, e)} // Changement ici
               >
                 <Trash2 size={14} />
               </button>
