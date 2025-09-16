@@ -12,13 +12,13 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [editingConversation, setEditingConversation] = useState(null);
   const [newTitle, setNewTitle] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false); // État pour la sidebar mobile
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Charger les conversations au démarrage
   useEffect(() => {
     loadConversations();
-  }, [activeConversation]);
+  }, []);
 
   // Scroll automatique vers le bas
   useEffect(() => {
@@ -44,19 +44,39 @@ function App() {
     }
   };
 
-  // Charger les messages d'une conversation
+  // Charger les messages d'une conversation (simulé avec le contenu actuel)
   const loadMessages = async (conversationId) => {
+    console.log('Chargement messages pour conversation:', conversationId);
     try {
       const { data, error } = await supabase
-        .from('messages')
+        .from('conversations')
         .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
+        .eq('session_id', conversationId)
+        .single();
 
-      if (error) throw error;
-      setMessages(data || []);
+      if (error) {
+        console.error('Erreur Supabase:', error);
+        throw error;
+      }
+      
+      console.log('Conversation chargée:', data);
+      
+      // Pour l'instant, créer un message fictif basé sur le contenu
+      // Vous devrez adapter cette partie selon votre logique métier
+      const messagesArray = [];
+      if (data.message && data.message !== 'NULL') {
+        messagesArray.push({
+          id: `msg_${data.session_id}`,
+          role: 'user',
+          content: data.message,
+          created_at: data.created_at
+        });
+      }
+      
+      setMessages(messagesArray);
     } catch (error) {
       console.error('Erreur chargement messages:', error);
+      setMessages([]);
     }
   };
 
@@ -72,9 +92,9 @@ function App() {
       if (error) throw error;
 
       setConversations(prev => [data, ...prev]);
-      setActiveConversation(data.session_id); // Changement ici
+      setActiveConversation(data.session_id);
       setMessages([]);
-      setSidebarOpen(false); // Fermer la sidebar sur mobile après sélection
+      setSidebarOpen(false);
     } catch (error) {
       console.error('Erreur création conversation:', error);
     }
@@ -82,9 +102,10 @@ function App() {
 
   // Sélectionner une conversation
   const selectConversation = (conversationId) => {
+    console.log('Sélection conversation:', conversationId);
     setActiveConversation(conversationId);
     loadMessages(conversationId);
-    setSidebarOpen(false); // Fermer la sidebar sur mobile après sélection
+    setSidebarOpen(false);
   };
 
   // Supprimer une conversation
@@ -94,11 +115,11 @@ function App() {
       const { error } = await supabase
         .from('conversations')
         .delete()
-        .eq('session_id', conversationId); // Changement ici
+        .eq('session_id', conversationId);
 
       if (error) throw error;
 
-      setConversations(prev => prev.filter(conv => conv.session_id !== conversationId)); // Changement ici
+      setConversations(prev => prev.filter(conv => conv.session_id !== conversationId));
       if (activeConversation === conversationId) {
         setActiveConversation(null);
         setMessages([]);
@@ -123,13 +144,13 @@ function App() {
       const { error } = await supabase
         .from('conversations')
         .update({ title: newTitle.trim() })
-        .eq('session_id', conversationId); // Changement ici
+        .eq('session_id', conversationId);
 
       if (error) throw error;
 
       setConversations(prev => 
         prev.map(conv => 
-          conv.session_id === conversationId  // Changement ici
+          conv.session_id === conversationId 
             ? { ...conv, title: newTitle.trim() }
             : conv
         )
@@ -171,27 +192,27 @@ function App() {
     setLoading(true);
 
     try {
-      // Sauvegarder le message utilisateur
-      const { data: userMessage, error: userError } = await supabase
-        .from('messages')
-        .insert([{
-          conversation_id: activeConversation,
-          role: 'user',
-          content: messageText
-        }])
+      // Mettre à jour la conversation avec le nouveau message
+      const { data: updatedConversation, error: updateError } = await supabase
+        .from('conversations')
+        .update({ 
+          message: messageText,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('session_id', activeConversation)
         .select()
         .single();
 
-      if (userError) throw userError;
+      if (updateError) throw updateError;
 
-      // Ajouter le message à l'interface
-      setMessages(prev => [...prev, userMessage]);
-
-      // Mettre à jour la date de dernière modification de la conversation
-      await supabase
-        .from('conversations')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('session_id', activeConversation); // Changement ici
+      // Ajouter le message à l'interface immédiatement
+      const newMsg = {
+        id: `msg_${Date.now()}`,
+        role: 'user',
+        content: messageText,
+        created_at: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, newMsg]);
 
       // Envoyer à N8N
       await sendToN8N(messageText, activeConversation);
@@ -229,6 +250,7 @@ function App() {
 
       console.log('Message envoyé à N8N avec succès');
       
+      // Recharger les messages après un délai pour voir la réponse
       setTimeout(() => {
         loadMessages(conversationId);
       }, 3000);
@@ -241,26 +263,17 @@ function App() {
     }
   };
 
-  // Ajouter une réponse de l'assistant (utilisé seulement en cas d'erreur maintenant)
+  // Ajouter une réponse de l'assistant (en cas d'erreur)
   const addAssistantMessage = async (conversationId, content) => {
-    try {
-      const { data: assistantMessage, error } = await supabase
-        .from('messages')
-        .insert([{
-          conversation_id: conversationId,
-          role: 'assistant',
-          content: content
-        }])
-        .select()
-        .single();
+    const assistantMessage = {
+      id: `msg_assistant_${Date.now()}`,
+      role: 'assistant',
+      content: content,
+      created_at: new Date().toISOString()
+    };
 
-      if (error) throw error;
-
-      if (conversationId === activeConversation) {
-        setMessages(prev => [...prev, assistantMessage]);
-      }
-    } catch (error) {
-      console.error('Erreur ajout message assistant:', error);
+    if (conversationId === activeConversation) {
+      setMessages(prev => [...prev, assistantMessage]);
     }
   };
 
@@ -288,22 +301,22 @@ function App() {
         <div className="conversations-list">
           {conversations.map((conversation) => (
             <div
-              key={conversation.session_id} // Changement ici
-              className={`conversation-item ${activeConversation === conversation.session_id ? 'active' : ''}`} // Changement ici
-              onClick={() => selectConversation(conversation.session_id)} // Changement ici
+              key={conversation.session_id}
+              className={`conversation-item ${activeConversation === conversation.session_id ? 'active' : ''}`}
+              onClick={() => selectConversation(conversation.session_id)}
               onContextMenu={(e) => {
                 e.preventDefault();
-                startEditingTitle(conversation.session_id, conversation.title, e); // Changement ici
+                startEditingTitle(conversation.session_id, conversation.title, e);
               }}
             >
               <MessageCircle size={16} />
-              {editingConversation === conversation.session_id ? ( // Changement ici
+              {editingConversation === conversation.session_id ? (
                 <input
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => handleKeyPress(e, conversation.session_id)} // Changement ici
-                  onBlur={() => saveNewTitle(conversation.session_id)} // Changement ici
+                  onKeyDown={(e) => handleKeyPress(e, conversation.session_id)}
+                  onBlur={() => saveNewTitle(conversation.session_id)}
                   className="title-input"
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
@@ -313,7 +326,7 @@ function App() {
               )}
               <button
                 className="delete-btn"
-                onClick={(e) => deleteConversation(conversation.session_id, e)} // Changement ici
+                onClick={(e) => deleteConversation(conversation.session_id, e)}
               >
                 <Trash2 size={14} />
               </button>
